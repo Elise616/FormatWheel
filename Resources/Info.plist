@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleIdentifier</key>
+	<string>com.formatwheel.app</string>
+	<key>CFBundleName</key>
+	<string>FormatWheel</string>
+	<key>CFBundleDisplayName</key>
+	<string>格式轮盘</string>
+	<key>CFBundleExecutable</key>
+	<string>FormatWheel</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>zh-Hans</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.0</string>
+	<key>NSHumanReadableCopyright</key>
+	<string>© 2026 Elise616 · MIT License</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSDesktopFolderUsageDescription</key>
+	<string>格式轮盘会把转换结果保存在原文件旁边。</string>
+	<key>NSDocumentsFolderUsageDescription</key>
+	<string>格式轮盘会把转换结果保存在原文件旁边。</string>
+	<key>NSDownloadsFolderUsageDescription</key>
+	<string>格式轮盘会把转换结果保存在原文件旁边。</string>
+	<key>NSRemovableVolumesUsageDescription</key>
+	<string>格式轮盘会把转换结果保存在原文件旁边。</string>
+	<key>NSNetworkVolumesUsageDescription</key>
+	<string>格式轮盘会把转换结果保存在原文件旁边。</string>
+</dict>
+</plist>

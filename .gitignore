@@ -1,0 +1,5 @@
+build/
+dist/
+宣传片/
+screenshots/
+.DS_Store

@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>格式轮盘 FormatWheel · 拖住文件，按 Shift，一甩就转好</title>
+<meta name="description" content="住在 macOS 菜单栏里的格式转换轮盘：拖住文件，按一下 Shift，朝格子一甩，松手就转好。图片、PDF、视频、音频、文档，全程本地，免费开源。">
+<meta name="theme-color" content="#07090c">
+<meta name="color-scheme" content="dark">
+<link rel="icon" type="image/png" href="media/icon.png">
+<link rel="apple-touch-icon" href="media/icon.png">
+<meta property="og:type" content="website">
+<meta property="og:title" content="格式轮盘 FormatWheel">
+<meta property="og:description" content="拖住文件，按一下 ⇧ Shift，朝格子一甩，松手 —— 转好了。免费开源的 macOS 格式转换轮盘。">
+<meta property="og:url" content="https://elise616.github.io/FormatWheel/">
+<meta property="og:image" content="https://elise616.github.io/FormatWheel/media/poster.jpg">
+<meta property="og:image:width" content="1920">
+<meta property="og:image:height" content="1080">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="格式轮盘 FormatWheel">
+<meta name="twitter:description" content="拖住文件，按一下 ⇧ Shift，朝格子一甩，松手 —— 转好了。">
+<meta name="twitter:image" content="https://elise616.github.io/FormatWheel/media/poster.jpg">
+<style>
+  :root {
+    --bg: #07090c;
+    --panel: rgba(16, 20, 27, 0.78);
+    --panel-solid: #10141b;
+    --line: rgba(255, 255, 255, 0.09);
+    --text: #f3f5f8;
+    --muted: #9ba5b4;
+    --blue: #3a86ff;
+    --gold: #f2c14e;
+    --red: #d7322b;
+    --green: #2fbf62;
+    --cn: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", "Source Han Sans SC", system-ui, -apple-system, sans-serif;
+    --hud: "Avenir Next Condensed", "Arial Narrow", "Roboto Condensed", var(--cn);
+    --impact: Impact, Haettenschweiler, "Arial Narrow Bold", "Franklin Gothic Bold", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background:
+      radial-gradient(900px 520px at 12% -8%, rgba(58, 134, 255, 0.20), transparent 70%),
+      radial-gradient(800px 480px at 95% 4%, rgba(215, 50, 43, 0.16), transparent 70%),
+      var(--bg);
+    color: var(--text);
+    font: 16px/1.7 var(--cn);
+    -webkit-font-smoothing: antialiased;
+    overflow-x: clip;
+  }
+  a { color: inherit; }
+  img, video { display: block; max-width: 100%; height: auto; }
+  .wrap { width: 100%; max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+
+  .hud { font-family: var(--hud); font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
+  .kicker { margin: 0 0 10px; font-size: 13px; color: var(--blue); }
+  kbd {
+    display: inline-block; padding: 0.02em 0.42em; border-radius: 0.28em;
+    background: #f3f5f8; color: #0b0d10; font: 700 0.78em/1.35 var(--hud); letter-spacing: 0.02em;
+    box-shadow: 0 0.12em 0 rgba(0, 0, 0, 0.55); vertical-align: 0.12em;
+  }
+
+  /* top bar */
+  .top { position: sticky; top: 0; z-index: 10; background: rgba(7, 9, 12, 0.72); backdrop-filter: saturate(140%) blur(14px); -webkit-backdrop-filter: saturate(140%) blur(14px); border-bottom: 1px solid var(--line); }
+  .top .wrap { display: flex; align-items: center; justify-content: space-between; height: 56px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; text-decoration: none; }
+  .brand img { width: 28px; height: 28px; }
+  .top nav a { margin-left: 20px; color: var(--muted); text-decoration: none; font-size: 15px; }
+  .top nav a:hover { color: var(--text); }
+
+  /* hero */
+  .hero { position: relative; overflow: hidden; padding: 72px 0 56px; text-align: center; }
+  .ring {
+    position: absolute; left: 50%; top: 50%; width: min(620px, 135vw); aspect-ratio: 1; transform: translate(-50%, -54%);
+    border-radius: 50%; opacity: 0.5; pointer-events: none;
+    background:
+      repeating-conic-gradient(from -22.5deg, rgba(255, 255, 255, 0.22) 0 0.5deg, transparent 0.5deg 45deg),
+      conic-gradient(from -22.5deg, rgba(58, 134, 255, 0.75) 0 45deg, rgba(255, 255, 255, 0.07) 45deg 360deg);
+    -webkit-mask: radial-gradient(circle, transparent 54%, #000 54.4%, #000 70%, transparent 70.4%);
+            mask: radial-gradient(circle, transparent 54%, #000 54.4%, #000 70%, transparent 70.4%);
+    animation: select 8s steps(8) infinite;
+  }
+  @keyframes select { to { transform: translate(-50%, -54%) rotate(360deg); } }
+  .hero > *:not(.ring) { position: relative; }
+  .hero-icon { width: 96px; height: 96px; margin: 0 auto 18px; filter: drop-shadow(0 10px 28px rgba(0, 0, 0, 0.55)); }
+  h1 {
+    margin: 0 auto; max-width: 15em; font-size: clamp(30px, 5.6vw, 60px); line-height: 1.18; font-weight: 800; letter-spacing: -0.01em;
+    text-shadow: 0 2px 0 rgba(0, 0, 0, 0.6), 0 10px 40px rgba(0, 0, 0, 0.6);
+  }
+  h1, h2, .lede { text-wrap: balance; }
+  h1 em { font-style: normal; color: var(--gold); }
+  .lede { max-width: 34em; margin: 20px auto 0; color: #c9d0da; font-size: clamp(16px, 2vw, 18px); }
+  .cta { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 30px; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 10px; padding: 14px 24px; border-radius: 12px;
+    font-weight: 700; font-size: 17px; text-decoration: none; transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .btn:hover { transform: translateY(-1px); }
+  .btn:focus-visible, a:focus-visible, button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+  .btn svg { width: 20px; height: 20px; }
+  .primary { background: linear-gradient(#37cc6d, #22994e); color: #fff; box-shadow: 0 10px 32px rgba(47, 191, 98, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.25); }
+  .ghost { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.16); }
+  .meta { margin: 16px 0 0; color: var(--muted); font-size: 14px; }
+
+  /* sections */
+  .section { padding: 64px 0; scroll-margin-top: 56px; }
+  h2 { margin: 0 0 14px; font-size: clamp(25px, 3.6vw, 38px); line-height: 1.25; font-weight: 800; }
+  .section > .wrap > p.intro { max-width: 40em; margin: 0 0 28px; color: #c9d0da; }
+  .muted { color: var(--muted); }
+
+  .frame { position: relative; padding: 10px; border-radius: 18px; background: var(--panel); border: 1px solid var(--line); box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55); }
+  .frame::before, .frame::after { content: ""; position: absolute; width: 34px; height: 34px; border: 3px solid var(--blue); pointer-events: none; }
+  .frame::before { top: -6px; left: -6px; border-right: 0; border-bottom: 0; border-radius: 10px 0 0 0; }
+  .frame::after { right: -6px; bottom: -6px; border-left: 0; border-top: 0; border-radius: 0 0 10px 0; }
+  .frame video { width: 100%; border-radius: 10px; background: #000; aspect-ratio: 16 / 9; }
+  .caption { margin: 14px 0 0; text-align: center; color: var(--muted); font-size: 14px; }
+  .caption a { color: var(--text); }
+
+  .how { display: grid; grid-template-columns: 1.25fr 1fr; gap: 32px; align-items: center; }
+  .how img { border-radius: 14px; border: 1px solid var(--line); }
+  .steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+  .steps li { display: grid; grid-template-columns: auto 1fr; column-gap: 16px; padding: 16px 18px; border-radius: 14px; background: var(--panel); border: 1px solid var(--line); }
+  .steps .num { grid-row: span 2; font: 700 30px/1 var(--impact); color: var(--blue); padding-top: 2px; }
+  .steps b { font-size: 18px; }
+  .steps p { margin: 4px 0 0; color: var(--muted); font-size: 15px; }
+
+  .gallery { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .gallery figure { margin: 0; }
+  .gallery img { border-radius: 12px; border: 1px solid var(--line); }
+  .gallery figcaption { margin-top: 8px; color: var(--muted); font-size: 14px; }
+
+  .kinds { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 28px; }
+  .kind { padding: 18px; border-radius: 14px; background: var(--panel); border: 1px solid var(--line); }
+  .kind h3 { margin: 0 0 8px; font-size: 18px; }
+  .kind p { margin: 6px 0 0; font-size: 14px; line-height: 1.65; color: #c9d0da; }
+  .kind .tag { display: inline-block; margin-right: 6px; padding: 0 6px; border-radius: 4px; font: 700 12px/1.6 var(--hud); letter-spacing: 0.06em; background: rgba(58, 134, 255, 0.18); color: #8db8ff; }
+  .kind .tag.tool { background: rgba(242, 193, 78, 0.16); color: var(--gold); }
+
+  .split { display: grid; grid-template-columns: 1fr 1.15fr; gap: 36px; align-items: center; }
+  .split img { border-radius: 14px; border: 1px solid var(--line); }
+  .clues { list-style: none; margin: 18px 0; padding: 0; border-radius: 14px; background: var(--panel); border: 1px solid var(--line); }
+  .clues li { display: flex; justify-content: space-between; gap: 12px; padding: 11px 16px; border-top: 1px solid var(--line); font-size: 15px; }
+  .clues li:first-child { border-top: 0; }
+  .stars { flex: none; color: #fff; letter-spacing: 0.08em; animation: police 1.2s steps(2) infinite; }
+  @keyframes police { 0% { text-shadow: 0 0 10px rgba(215, 50, 43, 0.9); } 100% { text-shadow: 0 0 10px rgba(58, 134, 255, 0.95); } }
+
+  .duo { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+  .duo img { border-radius: 12px; border: 1px solid var(--line); }
+  .banner-word { font-family: var(--impact); letter-spacing: 0.02em; }
+  .passed { color: var(--gold); }
+  .wasted { color: var(--red); }
+
+  .install { counter-reset: step; list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .install > li { min-width: 0; counter-increment: step; position: relative; padding: 18px 20px 18px 64px; border-radius: 14px; background: var(--panel); border: 1px solid var(--line); }
+  .install > li::before { content: counter(step); position: absolute; left: 20px; top: 16px; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--blue); font: 700 16px/1 var(--hud); }
+  .install p { margin: 8px 0 0; }
+  .os { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+  .os div { padding: 12px 14px; border-radius: 10px; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line); }
+  .os p { margin: 4px 0 0; color: #c9d0da; font-size: 15px; }
+  .cmd { display: flex; align-items: center; gap: 10px; margin-top: 10px; padding: 10px 10px 10px 14px; border-radius: 10px; background: #000; border: 1px solid var(--line); }
+  .cmd code { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: #e7ecf3; }
+  .cmd button { flex: none; padding: 6px 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.18); background: rgba(255, 255, 255, 0.08); color: var(--text); font: 600 13px/1.4 var(--cn); cursor: pointer; }
+  .cmd button:hover { background: rgba(255, 255, 255, 0.14); }
+  .ammo { margin-top: 22px; padding: 18px 20px; border-radius: 14px; border: 1px dashed rgba(255, 255, 255, 0.18); }
+  .ammo p { margin: 6px 0 0; color: #c9d0da; font-size: 15px; }
+
+  footer { padding: 40px 0 56px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+  footer p { margin: 6px 0; }
+  footer a { color: var(--text); }
+
+  @media (max-width: 860px) {
+    .how, .split { grid-template-columns: 1fr; }
+    .kinds { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 600px) {
+    .wrap { padding: 0 16px; }
+    .top nav a { margin-left: 14px; font-size: 14px; }
+    .top nav .optional { display: none; }
+    .hero { padding: 48px 0 40px; }
+    .hero-icon { width: 76px; height: 76px; }
+    .section { padding: 44px 0; }
+    .gallery, .duo, .os, .kinds { grid-template-columns: 1fr; }
+    .install > li { padding: 16px 16px 16px 56px; }
+    .install > li::before { left: 14px; }
+    .btn { width: 100%; justify-content: center; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .ring, .stars { animation: none; }
+    .btn { transition: none; }
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#top"><img src="media/icon.png" alt="" width="28" height="28"><span>格式轮盘</span></a>
+    <nav>
+      <a class="optional" href="#wheel">能转什么</a>
+      <a href="#install">安装</a>
+      <a href="https://github.com/Elise616/FormatWheel">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero">
+    <div class="ring" aria-hidden="true"></div>
+    <div class="wrap">
+      <img class="hero-icon" src="media/icon.png" alt="" width="96" height="96">
+      <p class="kicker hud">格式轮盘 · FormatWheel · for macOS</p>
+      <h1>拖住文件，按一下 <kbd>⇧ Shift</kbd><br>朝格子一甩，松手 —— <em>转好了。</em></h1>
+      <p class="lede">住在菜单栏里的格式转换轮盘。图片、PDF、视频、音频、文档，70 多种转换和小工具，全程在你的 Mac 上完成。</p>
+      <div class="cta">
+        <a class="btn primary" href="https://github.com/Elise616/FormatWheel/releases/latest/download/FormatWheel.dmg">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 19h16"/></svg>
+          下载 macOS 版
+        </a>
+        <a class="btn ghost" href="#promo">▶ 看宣传片</a>
+      </div>
+      <p class="meta">v1.0.0 · 2.2 MB · macOS 14 及以上 · Apple 芯片 / Intel 通用 · 免费开源</p>
+    </div>
+  </section>
+
+  <section id="promo" class="section" style="padding-top: 24px">
+    <div class="wrap">
+      <div class="frame">
+        <video controls playsinline preload="metadata" poster="media/poster.jpg" width="1920" height="1080">
+          <source src="media/promo.mp4" type="video/mp4">
+        </video>
+      </div>
+      <p class="caption">40 秒宣传片 · 记得开声音 · <a href="media/promo.mp4" download>下载 MP4</a></p>
+    </div>
+  </section>
+
+  <section id="how" class="section">
+    <div class="wrap">
+      <p class="kicker hud">How it works</p>
+      <h2>三步，比打开转换网站还快</h2>
+      <div class="how">
+        <img src="media/demo.gif" alt="拖住文件，按 Shift，轮盘弹出，朝格子一甩，弹出 MISSION PASSED" width="720" height="406" loading="lazy">
+        <ol class="steps">
+          <li><span class="num">01</span><b>拖住文件</b><p>在 Finder 或桌面上拖住一个或多个文件，先别松手。</p></li>
+          <li><span class="num">02</span><b>按一下 <kbd>⇧ Shift</kbd></b><p>屏幕暗下来，轮盘在鼠标处弹出；再按一次翻到「工具」页。</p></li>
+          <li><span class="num">03</span><b>朝格子一甩，松手</b><p>方向对就行，不用拖到格子上。结果存在原文件旁边，原文件不动。</p></li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <section id="wheel" class="section">
+    <div class="wrap">
+      <p class="kicker hud">Loadout</p>
+      <h2>轮盘里有什么</h2>
+      <p class="intro">拖什么文件，就弹出什么轮盘。第 1 页是格式转换，按 Shift 翻到第 2 页是工具。右上角属性条告诉你这一下会得到什么、牺牲什么。</p>
+      <div class="gallery">
+        <figure><img src="media/wheel-image.jpg" alt="图片的格式转换轮盘" width="1600" height="1039" loading="lazy"><figcaption>图片 · 格式转换</figcaption></figure>
+        <figure><img src="media/wheel-video.jpg" alt="视频的格式转换轮盘" width="1600" height="1039" loading="lazy"><figcaption>视频</figcaption></figure>
+        <figure><img src="media/wheel-audio.jpg" alt="音频的格式转换轮盘" width="1600" height="1039" loading="lazy"><figcaption>音频</figcaption></figure>
+      </div>
+      <div class="kinds">
+        <div class="kind"><h3>图片</h3><p><span class="tag">转换</span>PNG · JPG · HEIC · WebP · PDF · AVIF · GIF · TIFF</p><p><span class="tag tool">工具</span>压缩 · 缩小一半 · 抠图 · 识字 · 黑白 · 旋转 · 去隐私 · 加背景</p></div>
+        <div class="kind"><h3>PDF</h3><p><span class="tag">转换</span>PNG · JPG · 长图 · Word · TXT · Markdown · RTF · HTML</p><p><span class="tag tool">工具</span>压缩 · 拆页 · 合并 · 旋转 · 黑白 · 识字 · 去隐私 · ZIP</p></div>
+        <div class="kind"><h3>视频</h3><p><span class="tag">转换</span>MP4 · MOV · HEVC · WebM · GIF · MP3 · M4A · WAV</p><p><span class="tag tool">工具</span>压缩 · 静音 · 720P · 截封面 · 2 倍速 · 慢放 · 去隐私 · ZIP</p></div>
+        <div class="kind"><h3>音频</h3><p><span class="tag">转换</span>MP3 · M4A · WAV · FLAC · AIFF · Opus · ALAC · iPhone 铃声</p><p><span class="tag tool">工具</span>压缩 · 单声道 · 响度统一 · 1.5 倍速 · ZIP · 复制路径</p></div>
+        <div class="kind"><h3>文档</h3><p><span class="tag">转换</span>PDF · Word · TXT · Markdown · HTML · RTF · ODT · DOC</p><p><span class="tag tool">工具</span>字数统计 · 复制全文 · 去隐私 · ZIP · 复制路径</p></div>
+        <div class="kind"><h3>其他 / 文件夹</h3><p><span class="tag">通用</span>ZIP · 复制路径 · 复制文件名 · SHA-256</p><p class="muted">多选图片时，PDF 格子会把它们合成一个 PDF。</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="wanted" class="section">
+    <div class="wrap split">
+      <div>
+        <p class="kicker hud">Wanted level</p>
+        <h2>通缉星级</h2>
+        <p>轮盘一打开，右上角就亮起通缉星：星越多，文件里能追踪到你的信息越多。</p>
+        <ul class="clues">
+          <li><span>照片 / 视频里的 GPS 定位</span><span class="stars">★★</span></li>
+          <li><span>手机或相机型号、拍摄时间、机身序列号</span><span class="stars">各 ★</span></li>
+          <li><span>PDF 的作者 / 制作软件 / 主题关键词</span><span class="stars">★★ ★ ★</span></li>
+          <li><span>Word 的作者 / 修改人 / 公司名</span><span class="stars">★★ ★ ★</span></li>
+        </ul>
+        <p class="muted">指向「去隐私」格子时星星开始闪，松手后星星熄灭 —— 甩掉警察。照片、视频、PDF、Word 都支持，不重新压缩画面。</p>
+      </div>
+      <img src="media/wheel-tools.jpg" alt="工具页指向「去隐私」，右上角四颗通缉星在闪" width="1600" height="1039" loading="lazy">
+    </div>
+  </section>
+
+  <section id="result" class="section">
+    <div class="wrap">
+      <p class="kicker hud">Mission</p>
+      <h2>翻车也要有仪式感</h2>
+      <p class="intro">成功时先响一声武器上膛（手枪拉套筒、霰弹枪“咔嚓”、手雷拔环……），再弹出 <span class="banner-word passed">MISSION PASSED</span>；失败就压暗屏幕打出 <span class="banner-word wasted">WASTED</span>，顺便告诉你怎么修。</p>
+      <div class="duo">
+        <img src="media/mission-passed.jpg" alt="MISSION PASSED 横幅" width="1600" height="1039" loading="lazy">
+        <img src="media/wasted.jpg" alt="WASTED 画面" width="1600" height="1039" loading="lazy">
+      </div>
+    </div>
+  </section>
+
+  <section id="icons" class="section">
+    <div class="wrap">
+      <p class="kicker hud">Two styles</p>
+      <h2>格子图标，两种都有</h2>
+      <p class="intro">默认是格式图标：一眼看出格式本身的特点，PNG 带透明格、JPG 是风景照、WebP 是浏览器、TIFF 是打印机。菜单栏 →「格子图标」可以换成武器：PNG 突击步枪、JPG 手枪、PDF 火箭筒、抠图 匕首。</p>
+      <div class="duo">
+        <img src="media/icons.jpg" alt="全部格式图标" width="1600" height="1400" loading="lazy">
+        <img src="media/weapons-mode.jpg" alt="武器模式的轮盘" width="1600" height="1039" loading="lazy">
+      </div>
+    </div>
+  </section>
+
+  <section id="install" class="section">
+    <div class="wrap">
+      <p class="kicker hud">Install</p>
+      <h2>安装</h2>
+      <ol class="install">
+        <li>下载 <a href="https://github.com/Elise616/FormatWheel/releases/latest/download/FormatWheel.dmg">FormatWheel.dmg</a>，双击打开，把「FormatWheel」拖进「Applications」。</li>
+        <li>
+          第一次打开时 macOS 会拦一下（“无法验证开发者”）。这是个人做的免费开源小工具，没有付费给苹果做公证，不是病毒：
+          <div class="os">
+            <div><b>macOS 14</b><p>在「应用程序」里右键点 FormatWheel →「打开」→ 弹窗里再点「打开」。</p></div>
+            <div><b>macOS 15 及以后</b><p>先双击一次，然后去「系统设置 → 隐私与安全性」，拉到下面点「仍要打开」，输入开机密码。</p></div>
+          </div>
+          <p>还是打不开：打开「终端」，粘贴这一行回车，再双击打开。</p>
+          <div class="cmd"><code>xattr -dr com.apple.quarantine /Applications/FormatWheel.app</code><button type="button" data-copy="xattr -dr com.apple.quarantine /Applications/FormatWheel.app">复制</button></div>
+        </li>
+        <li>菜单栏会多一个小轮盘图标（Dock 里没有），第一次会自动演示一遍。之后在 Finder 里拖住文件、按 Shift 就行。</li>
+      </ol>
+      <div class="ammo">
+        <b>可选：装上更多「弹药」</b>
+        <p>WebP 需要 cwebp；AVIF、WebM、MP3、Opus、视频变速等需要 ffmpeg。没装时这些格子显示「未装备」，其他格子照常能用。装了 <a href="https://brew.sh">Homebrew</a> 的话：</p>
+        <div class="cmd"><code>brew install ffmpeg webp</code><button type="button" data-copy="brew install ffmpeg webp">复制</button></div>
+      </div>
+      <div class="cta" style="margin-top: 36px">
+        <a class="btn primary" href="https://github.com/Elise616/FormatWheel/releases/latest/download/FormatWheel.dmg">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 19h16"/></svg>
+          下载 macOS 版
+        </a>
+        <a class="btn ghost" href="https://github.com/Elise616/FormatWheel">查看源码</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>格式轮盘 FormatWheel · <a href="https://github.com/Elise616/FormatWheel">GitHub</a> · <a href="https://github.com/Elise616/FormatWheel/blob/main/LICENSE">MIT 协议</a> · <a href="https://github.com/Elise616/FormatWheel/releases">所有版本</a> · 灵感来自 <a href="https://x.com/th2049/status/2111477585461039241">@th2049</a></p>
+    <p>所有转换都在你的 Mac 上完成：不联网、不上传、不收集任何数据。</p>
+    <p>致敬向的个人作品，与任何游戏公司无关。应用里的图标、武器剪影和音效全部由代码现画、现合成。</p>
+  </div>
+</footer>
+
+<script>
+  document.querySelectorAll('[data-copy]').forEach(function (button) {
+    button.addEventListener('click', function () {
+      var text = button.getAttribute('data-copy');
+      var done = function (label) {
+        button.textContent = label;
+        setTimeout(function () { button.textContent = '复制'; }, 1600);
+      };
+      try {
+        navigator.clipboard.writeText(text).then(function () { done('已复制'); }, function () { done('请手动复制'); });
+      } catch (e) {
+        done('请手动复制');
+      }
+    });
+  });
+</script>
+</body>
+</html>
