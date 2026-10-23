@@ -37,7 +37,9 @@ enum Engine {
         switch id {
         case "pdf.merge", "img.to.pdf" where files.count > 1:
             let out = try PDFOps.merge(files)
-            return RunSummary(outputs: [out], title: title, detail: "\(out.lastPathComponent) · \(Fmt.bytes(Fmt.size(of: out))) · 存到「\(FileManager.default.displayName(atPath: out.deletingLastPathComponent().path))」")
+            return RunSummary(outputs: [out], title: title, detail: ([out.lastPathComponent, Fmt.bytes(Fmt.size(of: out))]
+                + (keepsImageMetadata(id) ? [ImageOps.metadataWarning] : [])
+                + ["存到「\(FileManager.default.displayName(atPath: out.deletingLastPathComponent().path))」"]).joined(separator: " · "))
         case "gen.zip":
             let out = try await GenericOps.zip(files)
             return RunSummary(outputs: [out], title: title, detail: "\(out.lastPathComponent) · \(Fmt.bytes(Fmt.size(of: out))) · 存到「\(FileManager.default.displayName(atPath: out.deletingLastPathComponent().path))」")
@@ -91,11 +93,17 @@ enum Engine {
         } else if !clips.isEmpty {
             detail.append("文字已复制到剪贴板")
         }
+        if !outputs.isEmpty, keepsImageMetadata(id) { detail.append(ImageOps.metadataWarning) }
         if !failures.isEmpty { detail.append("\(failures.count) 个失败：\(failures[0].localizedDescription)") }
         var summary = RunSummary(outputs: outputs, title: title, detail: "")
         if let saved = summary.saved { detail.append("存到「\(saved)」") }
         summary.detail = detail.joined(separator: " · ")
         return summary
+    }
+
+    /// Operations that carry EXIF/GPS/TIFF properties over to the result.
+    private static func keepsImageMetadata(_ id: String) -> Bool {
+        id.hasPrefix("img.to.") || ["img.half", "img.mono", "img.rotate"].contains(id)
     }
 
     static func runOne(_ id: String, _ file: URL, progress: @escaping ProgressFn) async throws -> OpResult {

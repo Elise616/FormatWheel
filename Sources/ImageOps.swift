@@ -39,6 +39,9 @@ enum ImageOps {
         return LoadedImage(cg: image, props: props)
     }
 
+    /// Shown after conversions that copy EXIF/GPS/TIFF properties across (and in their wheel slots).
+    static let metadataWarning = "可能保留 GPS、作者和拍摄信息；分享前请使用去隐私"
+
     /// Metadata worth keeping across a conversion; orientation is reset because pixels are already upright.
     static func carryOver(_ props: [CFString: Any]) -> [CFString: Any] {
         var out: [CFString: Any] = [kCGImagePropertyOrientation: 1]
