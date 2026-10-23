@@ -27,7 +27,7 @@ enum Snapshot {
         content.wanted.phase = 0.1
         if let hover, let option = context.pages[page].slots[safe: hover] ?? nil, option.id.hasSuffix(".strip") {
             content.wanted.evading = true
-            content.wanted.caption = "松手 = 甩掉警察"
+            content.wanted.caption = "仅处理所列字段"
         }
         try write(root, to: out)
     }

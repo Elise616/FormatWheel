@@ -342,10 +342,10 @@ final class Overlay {
         if stars.level > 0 {
             stars.phase += dt
             if stars.appear < 1 { stars.appear = min(1, stars.appear + dt / 0.9) }
-            // Pointing at 去隐私 previews losing the cops: the stars start to blink.
+            // Pointing at 去隐私 blinks the stars as a preview of what it will touch (fields only, not anonymity).
             let lyingLow = currentOption.map { $0.enabled && $0.id.hasSuffix(".strip") } ?? false
             stars.evading = lyingLow
-            stars.caption = lyingLow ? "松手 = 甩掉警察" : nil
+            stars.caption = lyingLow ? "仅处理所列字段" : nil
             stars.needsDisplay = true
         }
     }
@@ -379,7 +379,7 @@ final class Overlay {
         let files = (info.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL]) ?? []
         let screen = self.screen
         close(animated: true)
-        Runner.shared.run(option, files: files.isEmpty ? context.files : files, screen: screen, wanted: wanted)
+        Runner.shared.run(option, files: files.isEmpty ? context.files : files, screen: screen)
         return true
     }
 
@@ -416,7 +416,7 @@ final class Overlay {
                 SFX.shared.play(.wasted)
                 BannerController.shared.show(passed: false, title: option.title, detail: "文件被拖到别的地方了，这次没转换", on: screen)
             } else {
-                Runner.shared.run(option, files: present, screen: screen, wanted: self.wanted)
+                Runner.shared.run(option, files: present, screen: screen)
             }
         }
         closeWork = work
@@ -441,7 +441,7 @@ final class Overlay {
         if mode == .demo {
             Runner.shared.demo(option, context: context, screen: screen)
         } else {
-            Runner.shared.run(option, files: context.files, screen: screen, wanted: wanted)
+            Runner.shared.run(option, files: context.files, screen: screen)
         }
     }
 }

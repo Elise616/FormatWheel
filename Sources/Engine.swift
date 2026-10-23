@@ -83,7 +83,11 @@ enum Engine {
         if !outputs.isEmpty, after > 0, !id.hasPrefix("gen.") {
             detail.append("\(Fmt.bytes(before)) → \(Fmt.bytes(after))")
         }
-        if targets.count == 1, let note = notes.first {
+        if id.hasSuffix(".strip") {
+            // Scope notes are the whole point of 去隐私 feedback: keep one copy even for batches.
+            var seen = Set<String>()
+            detail += notes.filter { seen.insert($0).inserted }
+        } else if targets.count == 1, let note = notes.first {
             detail.append(note)
         } else if !notes.isEmpty, id.hasSuffix("compress") {
             let saved = Int((1 - Double(after) / Double(max(before, 1))) * 100)
@@ -191,7 +195,7 @@ enum GenericOps {
 final class Runner {
     static let shared = Runner()
 
-    func run(_ option: WheelOption, files: [URL], screen: NSScreen?, wanted: Wanted = Wanted()) {
+    func run(_ option: WheelOption, files: [URL], screen: NSScreen?) {
         let name = files.count == 1 ? files[0].lastPathComponent : "\(files.count) 个文件"
         let job = BusyHUD.shared.begin("\(name) → \(option.title)")
         let id = option.id, label = option.title
@@ -205,16 +209,10 @@ final class Runner {
                 await MainActor.run {
                     BusyHUD.shared.end(job)
                     Recents.shared.add(summary.outputs)
-                    var detail = summary.detail
-                    let evaded = id.hasSuffix(".strip") && wanted.level > 0
                     // The chosen weapon is racked first, then the mission-passed sting.
                     SFX.shared.play(Weapon.of(id).sound)
-                    SFX.shared.play(evaded ? .evaded : .passed, after: 0.3)
-                    if evaded {
-                        WantedHUD.shared.evade(wanted, on: screen)
-                        detail = "通缉 " + String(repeating: "★", count: wanted.level) + " 已解除" + (summary.saved.map { " · 存到「\($0)」" } ?? "")
-                    }
-                    BannerController.shared.show(passed: true, title: summary.title, detail: detail, on: screen)
+                    SFX.shared.play(.passed, after: 0.3)
+                    BannerController.shared.show(passed: true, title: summary.title, detail: summary.detail, on: screen)
                 }
             } catch {
                 Log.write("run: failed \(id): \(error.localizedDescription)")
