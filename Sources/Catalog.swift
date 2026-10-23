@@ -265,7 +265,7 @@ enum Catalog {
             pdf.detail = "\(count) 张图按顺序合成一个 PDF"
             pdf.ammo = "合并"
         }
-        return WheelPage(name: "格式转换", slots: [
+        let slots = [
             format("img.to.png", "png", big: "PNG", ammo: "无损", title: "PNG", detail: "无损画质，支持透明背景", current: current, traits: t),
             format("img.to.jpg", "jpg", big: "JPG", ammo: "通用", title: "JPG", detail: "到哪都能打开，体积适中", current: current, traits: t),
             format("img.to.heic", "heic", big: "HEIC", ammo: "苹果", title: "HEIC", detail: "苹果相册格式，小而清晰", current: current, traits: t),
@@ -274,23 +274,31 @@ enum Catalog {
             format("img.to.avif", "avif", big: "AVIF", ammo: "极小", title: "AVIF", detail: "新一代格式，体积最小（不保留透明）", current: current, traits: t, requires: "ffmpeg"),
             format("img.to.gif", "gif", big: "GIF", ammo: "256色", title: "GIF", detail: "老牌格式，只有 256 种颜色", current: current, traits: t),
             format("img.to.tiff", "tiff", big: "TIFF", ammo: "印刷", title: "TIFF", detail: "无损大文件，适合印刷和存档", current: current, traits: t),
-        ])
+        ]
+        return WheelPage(name: "格式转换", slots: slots.map { slot in
+            var o = slot
+            o.detail += " · " + metadataHint
+            return o
+        })
     }
+
+    /// Conversions copy EXIF/GPS/TIFF properties across where the target format can hold them.
+    private static let metadataHint = "可能保留拍摄信息；分享前请去隐私"
 
     private static func imageTools(base: [Double], count: Int) -> WheelPage {
         WheelPage(name: "工具", slots: [
             WheelOption(id: "img.compress", symbol: "arrow.down.right.and.arrow.up.left", ammo: "压缩", title: "压缩",
                         detail: "肉眼几乎看不出差别，体积大幅缩小", stats: adjusted(base, [0: { $0 * 0.9 }, 1: { $0 + 0.35 }])),
             WheelOption(id: "img.half", symbol: "minus.magnifyingglass", ammo: "缩小一半", title: "缩小一半",
-                        detail: "长宽各减半，体积约剩四分之一", stats: adjusted(base, [0: { $0 * 0.7 }, 1: { $0 + 0.3 }])),
+                        detail: "长宽各减半，体积约剩四分之一 · " + metadataHint, stats: adjusted(base, [0: { $0 * 0.7 }, 1: { $0 + 0.3 }])),
             WheelOption(id: "img.cutout", symbol: "scissors", ammo: "抠图", title: "抠图",
                         detail: "自动识别主体，去掉背景，导出透明 PNG", stats: adjusted(base, [3: { _ in 1 }])),
             WheelOption(id: "img.ocr", symbol: "text.viewfinder", ammo: "识字", title: "识字",
                         detail: "认出图里的文字，直接复制到剪贴板"),
             WheelOption(id: "img.mono", symbol: "circle.lefthalf.filled", ammo: "黑白", title: "黑白",
-                        detail: "一键变成黑白照片"),
+                        detail: "一键变成黑白照片 · " + metadataHint),
             WheelOption(id: "img.rotate", symbol: "rotate.right", ammo: "旋转", title: "旋转",
-                        detail: "顺时针转 90°"),
+                        detail: "顺时针转 90° · " + metadataHint),
             WheelOption(id: "img.strip", symbol: "location.slash", ammo: "去隐私", title: "去隐私",
                         detail: "抹掉 GPS 位置和拍摄信息，发图更安心"),
             WheelOption(id: "img.backdrop", symbol: "photo.artframe", ammo: "加背景", title: "加背景",
