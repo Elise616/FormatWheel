@@ -125,6 +125,8 @@ brew install ffmpeg webp
 
 所有转换都在你的 Mac 上完成：不联网、不上传、不收集任何数据。结果只写在原文件旁边，日志在 `~/Library/Logs/FormatWheel.log`。
 
+ffmpeg、cwebp 这类外部工具只从固定目录查找（`/opt/homebrew/bin`、`/usr/local/bin`、`/opt/local/bin`、`/usr/bin`、`/bin`），而且路径上的目录和文件必须属于 root 或当前用户、不能被其他用户写入（Homebrew 默认的 admin 组可写目录除外）。不满足时对应格子显示「未装备」并说明原因。这只防止其他账户替换工具，不防御已经控制了你账户的程序。
+
 ## 从源码构建
 
 只需要 Xcode Command Line Tools（`xcode-select --install`），不用装 Xcode。
