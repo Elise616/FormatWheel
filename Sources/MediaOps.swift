@@ -122,19 +122,19 @@ enum MediaOps {
         let h264 = ["-c:v", "libx264", "-preset", "medium", "-crf", "20", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart"]
         switch id {
         case "vid.to.mp4":
-            let out = Out.url(for: url, ext: "mp4")
+            let out = try Out.url(for: url, ext: "mp4")
             if native { try await exportBest(url, type: .mp4, out: out, progress: progress) }
             else { try await ff(url, h264, out: out, progress: progress) }
             return OpResult(outputs: [out])
 
         case "vid.to.mov":
-            let out = Out.url(for: url, ext: "mov")
+            let out = try Out.url(for: url, ext: "mov")
             if native { try await exportBest(url, type: .mov, out: out, progress: progress) }
             else { try await ff(url, h264.filter { $0 != "-movflags" && $0 != "+faststart" }, out: out, progress: progress) }
             return OpResult(outputs: [out])
 
         case "vid.to.hevc":
-            let out = Out.url(for: url, suffix: "HEVC", ext: "mp4")
+            let out = try Out.url(for: url, suffix: "HEVC", ext: "mp4")
             if Shell.ffmpeg != nil {
                 // HEVC holds the same quality at roughly half the H.264 bitrate, so aim there
                 // (the system "highest quality" preset often comes out *bigger* than the source).
@@ -150,13 +150,13 @@ enum MediaOps {
             return OpResult(outputs: [out])
 
         case "vid.to.webm":
-            let out = Out.url(for: url, ext: "webm")
+            let out = try Out.url(for: url, ext: "webm")
             try await ff(url, ["-c:v", "libvpx-vp9", "-crf", "32", "-b:v", "0", "-row-mt", "1", "-deadline", "good", "-cpu-used", "4",
                                "-c:a", "libopus", "-b:a", "128k"], out: out, progress: progress)
             return OpResult(outputs: [out])
 
         case "vid.to.gif":
-            let out = Out.url(for: url, ext: "gif")
+            let out = try Out.url(for: url, ext: "gif")
             let length = await duration(url)
             if Shell.ffmpeg != nil {
                 let graph = "fps=12,\(scaleFilter(maxSide: 540)),split[a][b];[a]palettegen=max_colors=200:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle"
@@ -167,12 +167,12 @@ enum MediaOps {
             return OpResult(outputs: [out], note: length > 30 ? "只取了前 30 秒" : nil)
 
         case "vid.to.mp3":
-            let out = Out.url(for: url, ext: "mp3")
+            let out = try Out.url(for: url, ext: "mp3")
             try await ff(url, ["-vn", "-c:a", "libmp3lame", "-q:a", "2"], out: out, progress: progress)
             return OpResult(outputs: [out])
 
         case "vid.to.m4a":
-            let out = Out.url(for: url, ext: "m4a")
+            let out = try Out.url(for: url, ext: "m4a")
             if await avAudio(url) {
                 try await export(AVURLAsset(url: url), preset: AVAssetExportPresetAppleM4A, type: .m4a, out: out, progress: progress)
             } else {
@@ -181,12 +181,12 @@ enum MediaOps {
             return OpResult(outputs: [out])
 
         case "vid.to.wav":
-            let out = Out.url(for: url, ext: "wav")
+            let out = try Out.url(for: url, ext: "wav")
             try await ff(url, ["-vn", "-c:a", "pcm_s16le"], out: out, progress: progress)
             return OpResult(outputs: [out])
 
         case "vid.compress":
-            let out = Out.url(for: url, suffix: "压缩", ext: "mp4")
+            let out = try Out.url(for: url, suffix: "压缩", ext: "mp4")
             if Shell.ffmpeg != nil {
                 try await ff(url, ["-c:v", "libx264", "-preset", "faster", "-crf", "27", "-vf", scaleFilter(maxSide: 1920), "-pix_fmt", "yuv420p",
                                    "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart"], out: out, progress: progress)
@@ -198,16 +198,16 @@ enum MediaOps {
         case "vid.mute":
             if Shell.ffmpeg != nil {
                 let ext = ["mp4", "mov", "m4v", "mkv", "webm"].contains(url.pathExtension.lowercased()) ? url.pathExtension.lowercased() : "mp4"
-                let out = Out.url(for: url, suffix: "静音", ext: ext)
+                let out = try Out.url(for: url, suffix: "静音", ext: ext)
                 try await ff(url, ["-map", "0:v", "-c", "copy", "-an"], out: out, progress: progress)
                 return OpResult(outputs: [out])
             }
-            let out = Out.url(for: url, suffix: "静音", ext: "mov")
+            let out = try Out.url(for: url, suffix: "静音", ext: "mov")
             try await muteNative(url, out: out, progress: progress)
             return OpResult(outputs: [out])
 
         case "vid.720p":
-            let out = Out.url(for: url, suffix: "720P", ext: "mp4")
+            let out = try Out.url(for: url, suffix: "720P", ext: "mp4")
             if native {
                 try await export(AVURLAsset(url: url), preset: AVAssetExportPreset1280x720, type: .mp4, out: out, progress: progress)
             } else {
@@ -216,7 +216,7 @@ enum MediaOps {
             return OpResult(outputs: [out])
 
         case "vid.cover":
-            let out = Out.url(for: url, suffix: "封面", ext: "jpg")
+            let out = try Out.url(for: url, suffix: "封面", ext: "jpg")
             let length = await duration(url)
             let at = length > 2 ? min(1.0, length * 0.1) : 0
             if native {
@@ -233,7 +233,7 @@ enum MediaOps {
 
         case "vid.fast", "vid.slow":
             let fast = id == "vid.fast"
-            let out = Out.url(for: url, suffix: fast ? "2倍速" : "慢放", ext: "mp4")
+            let out = try Out.url(for: url, suffix: fast ? "2倍速" : "慢放", ext: "mp4")
             try await ff(url, ["-filter:v", fast ? "setpts=0.5*PTS" : "setpts=2.0*PTS", "-filter:a", fast ? "atempo=2.0" : "atempo=0.5",
                                "-c:v", "libx264", "-preset", "fast", "-crf", "20", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "160k",
                                "-movflags", "+faststart"], out: out, progress: { p in progress(fast ? min(1, p * 2) : p / 2) })
@@ -317,35 +317,35 @@ enum MediaOps {
     static func audio(_ id: String, _ url: URL, progress: @escaping ProgressFn) async throws -> OpResult {
         switch id {
         case "aud.to.mp3":
-            let out = Out.url(for: url, ext: "mp3")
+            let out = try Out.url(for: url, ext: "mp3")
             try await ff(url, ["-vn", "-c:a", "libmp3lame", "-q:a", "2"], out: out, progress: progress)
             return OpResult(outputs: [out])
         case "aud.to.m4a":
-            let out = Out.url(for: url, ext: "m4a")
+            let out = try Out.url(for: url, ext: "m4a")
             try await audioVia(url, out: out, af: ["-f", "m4af", "-d", "aac", "-b", "256000"], ff: ["-c:a", "aac", "-b:a", "256k"], progress: progress)
             return OpResult(outputs: [out])
         case "aud.to.wav":
-            let out = Out.url(for: url, ext: "wav")
+            let out = try Out.url(for: url, ext: "wav")
             try await audioVia(url, out: out, af: ["-f", "WAVE", "-d", "LEI16"], ff: ["-c:a", "pcm_s16le"], progress: progress)
             return OpResult(outputs: [out])
         case "aud.to.aiff":
-            let out = Out.url(for: url, ext: "aiff")
+            let out = try Out.url(for: url, ext: "aiff")
             try await audioVia(url, out: out, af: ["-f", "AIFF", "-d", "BEI16"], ff: ["-c:a", "pcm_s16be"], progress: progress)
             return OpResult(outputs: [out])
         case "aud.to.flac":
-            let out = Out.url(for: url, ext: "flac")
+            let out = try Out.url(for: url, ext: "flac")
             try await audioVia(url, out: out, af: ["-f", "flac", "-d", "flac"], ff: ["-c:a", "flac"], progress: progress)
             return OpResult(outputs: [out])
         case "aud.to.opus":
-            let out = Out.url(for: url, ext: "opus")
+            let out = try Out.url(for: url, ext: "opus")
             try await ff(url, ["-vn", "-c:a", "libopus", "-b:a", "128k"], out: out, progress: progress)
             return OpResult(outputs: [out])
         case "aud.to.alac":
-            let out = Out.url(for: url, suffix: "无损", ext: "m4a")
+            let out = try Out.url(for: url, suffix: "无损", ext: "m4a")
             try await audioVia(url, out: out, af: ["-f", "m4af", "-d", "alac"], ff: ["-c:a", "alac"], progress: progress)
             return OpResult(outputs: [out])
         case "aud.to.m4r":
-            let out = Out.url(for: url, suffix: "铃声", ext: "m4r")
+            let out = try Out.url(for: url, suffix: "铃声", ext: "m4r")
             let length = await duration(url)
             if await avAudio(url) {
                 let range = CMTimeRange(start: .zero, duration: CMTime(seconds: min(40, max(length, 1)), preferredTimescale: 600))
@@ -357,7 +357,7 @@ enum MediaOps {
             }
             return OpResult(outputs: [out], note: length > 40 ? "截取了前 40 秒" : nil)
         case "aud.compress":
-            let out = Out.url(for: url, suffix: "压缩", ext: "m4a")
+            let out = try Out.url(for: url, suffix: "压缩", ext: "m4a")
             try await audioVia(url, out: out, af: ["-f", "m4af", "-d", "aac", "-b", "96000"], ff: ["-c:a", "aac", "-b:a", "96k"], progress: progress)
             return try ImageOps.shrinkResult(source: url, output: out)
         case "aud.mono", "aud.loud", "aud.fast":
@@ -371,7 +371,7 @@ enum MediaOps {
                 default: return ("1.5倍速", ["-af", "atempo=1.5"])
                 }
             }()
-            let out = Out.url(for: url, suffix: suffix, ext: same.ext)
+            let out = try Out.url(for: url, suffix: suffix, ext: same.ext)
             try await ff(url, ["-vn"] + filter + same.args, out: out, progress: { p in progress(id == "aud.fast" ? min(1, p * 1.5) : p) })
             return OpResult(outputs: [out])
         default:

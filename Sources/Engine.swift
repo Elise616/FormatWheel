@@ -30,16 +30,17 @@ final class Recents {
 enum Engine {
     /// Runs one wheel option over the dragged files.
     static func run(_ id: String, label: String, files: [URL], progress: @escaping ProgressFn) async throws -> RunSummary {
+        guard !files.isEmpty else { throw FWError("没有文件") }
         let name = files.count == 1 ? files[0].lastPathComponent : "\(files.count) 个文件"
         let title = "\(name)  →  \(label)"
 
         // Actions that take the whole selection at once.
         switch id {
         case "pdf.merge", "img.to.pdf" where files.count > 1:
-            let out = try PDFOps.merge(files)
+            let out = try await Out.stagedURL(near: files[0]) { try PDFOps.merge(files) }
             return RunSummary(outputs: [out], title: title, detail: "\(out.lastPathComponent) · \(Fmt.bytes(Fmt.size(of: out))) · 存到「\(FileManager.default.displayName(atPath: out.deletingLastPathComponent().path))」")
         case "gen.zip":
-            let out = try await GenericOps.zip(files)
+            let out = try await Out.stagedURL(near: files[0]) { try await GenericOps.zip(files) }
             return RunSummary(outputs: [out], title: title, detail: "\(out.lastPathComponent) · \(Fmt.bytes(Fmt.size(of: out))) · 存到「\(FileManager.default.displayName(atPath: out.deletingLastPathComponent().path))」")
         case "gen.path":
             await MainActor.run { Clipboard.set(files.map(\.path).joined(separator: "\n")) }
@@ -99,6 +100,10 @@ enum Engine {
     }
 
     static func runOne(_ id: String, _ file: URL, progress: @escaping ProgressFn) async throws -> OpResult {
+        try await Out.staged(near: file) { try await dispatch(id, file, progress: progress) }
+    }
+
+    private static func dispatch(_ id: String, _ file: URL, progress: @escaping ProgressFn) async throws -> OpResult {
         let parts = id.split(separator: ".").map(String.init)
         guard parts.count >= 2 else { throw FWError("未知操作 \(id)") }
         let target = parts.count == 3 && parts[1] == "to" ? parts[2] : nil
@@ -157,7 +162,7 @@ enum GenericOps {
     static func zip(_ files: [URL]) async throws -> URL {
         guard let first = files.first else { throw FWError("没有文件") }
         if files.count == 1 {
-            let out = Out.url(for: first, ext: "zip")
+            let out = try Out.url(for: first, ext: "zip")
             try await Shell.run("/usr/bin/ditto", ["-c", "-k", "--sequesterRsrc", "--keepParent", first.path, out.path])
             return out
         }
@@ -170,7 +175,7 @@ enum GenericOps {
             let target = Out.unique(in: bundle, base: base, ext: file.pathExtension)
             try FileManager.default.copyItem(at: file, to: target)
         }
-        let out = Out.unique(in: Out.dir(for: first), base: "归档 \(files.count) 项", ext: "zip")
+        let out = try Out.named("归档 \(files.count) 项", ext: "zip")
         try await Shell.run("/usr/bin/ditto", ["-c", "-k", "--sequesterRsrc", "--keepParent", bundle.path, out.path])
         return out
     }

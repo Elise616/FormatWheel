@@ -184,14 +184,14 @@ enum Privacy {
         let ext = url.pathExtension.lowercased()
         if await MediaOps.avVideo(url) {
             let type: AVFileType = ["mp4", "m4v"].contains(ext) ? .mp4 : .mov
-            let out = Out.url(for: url, suffix: "去隐私", ext: type == .mp4 ? "mp4" : "mov")
+            let out = try Out.url(for: url, suffix: "去隐私", ext: type == .mp4 ? "mp4" : "mov")
             try await MediaOps.export(AVURLAsset(url: url), preset: AVAssetExportPresetPassthrough, type: type, out: out, progress: progress) { session in
                 session.metadata = []
                 session.metadataItemFilter = .forSharing()
             }
             return OpResult(outputs: [out], note: evadedNote)
         }
-        let out = Out.url(for: url, suffix: "去隐私", ext: ext.isEmpty ? "mp4" : ext)
+        let out = try Out.url(for: url, suffix: "去隐私", ext: ext.isEmpty ? "mp4" : ext)
         try await MediaOps.ff(url, ["-map", "0", "-map_metadata", "-1", "-c", "copy"], out: out, progress: progress)
         return OpResult(outputs: [out], note: evadedNote)
     }
@@ -204,7 +204,7 @@ enum Privacy {
                                                 .keywordsAttribute, .creationDateAttribute, .modificationDateAttribute]
         for key in personal { attributes.removeValue(forKey: key.rawValue) }
         doc.documentAttributes = attributes
-        let out = Out.url(for: url, suffix: "去隐私", ext: "pdf")
+        let out = try Out.url(for: url, suffix: "去隐私", ext: "pdf")
         guard doc.write(to: out) else { throw FWError("保存失败") }
         return OpResult(outputs: [out], note: evadedNote)
     }
@@ -213,7 +213,7 @@ enum Privacy {
     static func stripDocx(_ url: URL) async throws -> OpResult {
         let tmp = try Out.tempDir()
         defer { try? FileManager.default.removeItem(at: tmp) }
-        let out = Out.url(for: url, suffix: "去隐私", ext: "docx")
+        let out = try Out.url(for: url, suffix: "去隐私", ext: "docx")
         try FileManager.default.copyItem(at: url, to: out)
         do {
             try FileManager.default.createDirectory(at: tmp.appendingPathComponent("docProps"), withIntermediateDirectories: true)
