@@ -1,4 +1,5 @@
 import AppKit
+import Darwin
 
 struct FWError: LocalizedError {
     let message: String
@@ -42,18 +43,43 @@ enum Fmt {
 }
 
 /// Where results go: next to the source file, never overwriting anything.
+///
+/// Every operation runs inside `Out.staged`. Names are handed out in a private 0700 directory created
+/// beside the destination; when the operation succeeds, each output is published with an exclusive
+/// rename (`RENAME_EXCL`), so an existing file, folder or dangling symlink is never replaced, even by a
+/// writer that races us. Filesystems without `RENAME_EXCL` fail closed instead of overwriting.
 enum Out {
-    static func dir(for source: URL) -> URL {
-        let dir = source.deletingLastPathComponent()
-        if FileManager.default.isWritableFile(atPath: dir.path) { return dir }
-        return FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory
+    @TaskLocal private static var stage: Stage?
+
+    /// Runs `body` with every `Out.url/folder/named` redirected into a staging directory, then publishes
+    /// the outputs it returns and always removes the staging directory.
+    static func staged(near source: URL, _ body: () async throws -> OpResult) async throws -> OpResult {
+        let stage = Stage(source: source)
+        defer { stage.discard() }
+        let result = try await Out.$stage.withValue(stage) { try await body() }
+        return try stage.publish(result)
     }
 
-    static func url(for source: URL, suffix: String? = nil, ext: String) -> URL {
+    /// Same, for actions that produce exactly one file.
+    static func stagedURL(near source: URL, _ body: () async throws -> URL) async throws -> URL {
+        let result = try await staged(near: source) { OpResult(outputs: [try await body()]) }
+        return result.outputs[0]
+    }
+
+    static func url(for source: URL, suffix: String? = nil, ext: String) throws -> URL {
         let base = source.deletingPathExtension().lastPathComponent + (suffix.map { " " + $0 } ?? "")
-        return unique(in: dir(for: source), base: base, ext: ext)
+        return try current().claim(base: base, ext: ext, directory: false)
     }
 
+    static func folder(for source: URL, suffix: String) throws -> URL {
+        try current().claim(base: source.deletingPathExtension().lastPathComponent + " " + suffix, ext: "", directory: true)
+    }
+
+    static func named(_ base: String, ext: String) throws -> URL {
+        try current().claim(base: base, ext: ext, directory: false)
+    }
+
+    /// Free name inside a private directory the caller already owns (never the user's folders).
     static func unique(in dir: URL, base: String, ext: String) -> URL {
         let fm = FileManager.default
         let dot = ext.isEmpty ? "" : "." + ext
@@ -66,16 +92,164 @@ enum Out {
         return candidate
     }
 
-    static func folder(for source: URL, suffix: String) throws -> URL {
-        let url = unique(in: dir(for: source), base: source.deletingPathExtension().lastPathComponent + " " + suffix, ext: "")
-        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
-        return url
-    }
-
     static func tempDir() throws -> URL {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("FormatWheel-" + UUID().uuidString)
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         return url
+    }
+
+    private static func current() throws -> Stage {
+        guard let stage else { throw FWError("输出操作缺少安全暂存上下文") }
+        return stage
+    }
+
+    private static func reason(_ code: Int32) -> String { String(cString: strerror(code)) }
+
+    private final class Stage: @unchecked Sendable {
+        private struct Claim { let base: String; let ext: String }
+
+        private let source: URL
+        private let lock = NSLock()
+        private var parentURL: URL?
+        private var parentFD: Int32 = -1
+        private var stageFD: Int32 = -1
+        private var stageURL: URL?
+        private var claims: [String: Claim] = [:]
+
+        init(source: URL) { self.source = source }
+
+        /// Reserves a name in the staging directory (created on first use, so read-only actions touch nothing).
+        func claim(base: String, ext: String, directory: Bool) throws -> URL {
+            lock.lock()
+            defer { lock.unlock() }
+            let dir = try create()
+            let dot = ext.isEmpty ? "" : "." + ext
+            var n = 1
+            while true {
+                let name = n == 1 ? base + dot : "\(base) \(n)\(dot)"
+                n += 1
+                var st = stat()
+                if claims[name] != nil || fstatat(stageFD, name, &st, AT_SYMLINK_NOFOLLOW) == 0 { continue }
+                claims[name] = Claim(base: base, ext: ext)
+                let url = dir.appendingPathComponent(name, isDirectory: directory)
+                if directory { try FileManager.default.createDirectory(at: url, withIntermediateDirectories: false) }
+                return url
+            }
+        }
+
+        /// Moves each claimed output next to the source (or the fallback folder) without replacing anything.
+        func publish(_ result: OpResult) throws -> OpResult {
+            lock.lock()
+            defer { lock.unlock() }
+            guard let stageURL else { return result }
+            var result = result
+            // Check every declared output first, so a missing one fails before anything becomes visible.
+            var pending: [(index: Int, name: String, claim: Claim, directory: Bool)] = []
+            for (index, output) in result.outputs.enumerated() {
+                let name = output.lastPathComponent
+                guard output.deletingLastPathComponent().path == stageURL.path, let claim = claims[name] else { continue }
+                var st = stat()
+                guard fstatat(stageFD, name, &st, AT_SYMLINK_NOFOLLOW) == 0, st.st_mode & mode_t(S_IFMT) != mode_t(S_IFLNK) else {
+                    throw FWError("输出文件没有生成：\(name)")
+                }
+                pending.append((index, name, claim, st.st_mode & mode_t(S_IFMT) == mode_t(S_IFDIR)))
+            }
+            var saved: [URL] = []
+            for item in pending {
+                do {
+                    let final = try move(item.name, claim: item.claim, directory: item.directory)
+                    result.outputs[item.index] = final
+                    saved.append(final)
+                } catch {
+                    if saved.isEmpty { throw error }
+                    throw FWError("\(error.localizedDescription)；已保存：\(saved.map(\.path).joined(separator: "、"))")
+                }
+            }
+            return result
+        }
+
+        private func move(_ name: String, claim: Claim, directory: Bool) throws -> URL {
+            let dot = claim.ext.isEmpty ? "" : "." + claim.ext
+            var n = 1
+            while true {
+                let finalName = n == 1 ? claim.base + dot : "\(claim.base) \(n)\(dot)"
+                if renameatx_np(stageFD, name, parentFD, finalName, UInt32(RENAME_EXCL)) == 0 {
+                    return parentURL!.appendingPathComponent(finalName, isDirectory: directory)
+                }
+                switch errno {
+                case EEXIST:
+                    n += 1
+                    if n > 10_000 { throw FWError("同名文件太多，没法保存") }
+                case ENOTSUP, EINVAL:
+                    throw FWError("目标磁盘不支持安全无覆盖保存；请将源文件移到本机磁盘后重试")
+                default:
+                    throw FWError("保存失败：\(Out.reason(errno))")
+                }
+            }
+        }
+
+        func discard() {
+            lock.lock()
+            defer { lock.unlock() }
+            if let stageURL { try? FileManager.default.removeItem(at: stageURL) }
+            if stageFD >= 0 { close(stageFD) }
+            if parentFD >= 0 { close(parentFD) }
+            stageFD = -1
+            parentFD = -1
+            stageURL = nil
+        }
+
+        private func create() throws -> URL {
+            if let stageURL { return stageURL }
+            let fm = FileManager.default
+            var candidates = [source.deletingLastPathComponent()]
+            if let downloads = fm.urls(for: .downloadsDirectory, in: .userDomainMask).first { candidates.append(downloads) }
+            candidates.append(fm.temporaryDirectory)
+            var failure = "没有可以保存的目录"
+            var tried = Set<String>()
+            for dir in candidates where tried.insert(dir.standardizedFileURL.path).inserted {
+                let pfd = open(dir.path, O_RDONLY | O_DIRECTORY | O_CLOEXEC)
+                guard pfd >= 0 else { failure = "\(dir.path)：\(Out.reason(errno))"; continue }
+                if let why = Self.exposure(of: pfd) {
+                    failure = "\(dir.path)：\(why)"
+                    close(pfd)
+                    continue
+                }
+                for _ in 0..<5 {
+                    let name = ".FormatWheel-" + UUID().uuidString
+                    if mkdirat(pfd, name, 0o700) != 0 {
+                        if errno == EEXIST { continue }
+                        failure = "\(dir.path)：\(Out.reason(errno))"
+                        break
+                    }
+                    let sfd = openat(pfd, name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
+                    guard sfd >= 0 else {
+                        failure = "\(dir.path)：\(Out.reason(errno))"
+                        unlinkat(pfd, name, AT_REMOVEDIR)
+                        break
+                    }
+                    parentURL = dir
+                    parentFD = pfd
+                    stageFD = sfd
+                    stageURL = dir.appendingPathComponent(name, isDirectory: true)
+                    return stageURL!
+                }
+                close(pfd)
+            }
+            throw FWError("没法保存结果，\(failure)")
+        }
+
+        /// A folder others can write to (without the sticky bit) would let them move our staging directory away.
+        /// Volumes mounted "ignore ownership" have no per-user permissions to judge by.
+        private static func exposure(of fd: Int32) -> String? {
+            var fs = statfs()
+            if fstatfs(fd, &fs) == 0, fs.f_flags & UInt32(MNT_IGNORE_OWNERSHIP) != 0 { return nil }
+            var st = stat()
+            guard fstat(fd, &st) == 0 else { return Out.reason(errno) }
+            let mode = st.st_mode
+            if mode & mode_t(S_IWGRP | S_IWOTH) != 0, mode & mode_t(S_ISVTX) == 0 { return "目录允许其他用户写入" }
+            return nil
+        }
     }
 }
 

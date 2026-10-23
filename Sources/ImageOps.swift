@@ -186,7 +186,7 @@ enum ImageOps {
 
     static func convert(_ url: URL, to fmt: String) async throws -> OpResult {
         let image = try load(url)
-        let out = Out.url(for: url, ext: fmt)
+        let out = try Out.url(for: url, ext: fmt)
         try await write(image.cg, to: out, fmt: fmt, quality: lossyQuality(fmt), props: carryOver(image.props))
         return OpResult(outputs: [out])
     }
@@ -213,7 +213,7 @@ enum ImageOps {
                 if longSide > 1600 { image = resized(image, scale: 1600 / Double(longSide)) }
             }
         }
-        let out = Out.url(for: url, suffix: "压缩", ext: fmt)
+        let out = try Out.url(for: url, suffix: "压缩", ext: fmt)
         try await write(image, to: out, fmt: fmt, quality: quality)
         return try shrinkResult(source: url, output: out)
     }
@@ -231,7 +231,7 @@ enum ImageOps {
     static func half(_ url: URL) async throws -> OpResult {
         let image = try load(url)
         let fmt = sameFormat(url)
-        let out = Out.url(for: url, suffix: "缩小", ext: fmt)
+        let out = try Out.url(for: url, suffix: "缩小", ext: fmt)
         let small = resized(image.cg, scale: 0.5)
         try await write(small, to: out, fmt: fmt, quality: lossyQuality(fmt), props: carryOver(image.props))
         return OpResult(outputs: [out], note: "\(small.width)×\(small.height)")
@@ -248,7 +248,7 @@ enum ImageOps {
         let buffer = try observation.generateMaskedImage(ofInstances: observation.allInstances, from: handler, croppedToInstancesExtent: false)
         let ci = CIImage(cvPixelBuffer: buffer)
         guard let masked = CIContext().createCGImage(ci, from: ci.extent) else { throw FWError("抠图失败") }
-        let out = Out.url(for: url, suffix: "抠图", ext: "png")
+        let out = try Out.url(for: url, suffix: "抠图", ext: "png")
         try await write(masked, to: out, fmt: "png")
         return OpResult(outputs: [out], note: "背景已去掉")
     }
@@ -267,7 +267,7 @@ enum ImageOps {
     static func ocr(_ url: URL) async throws -> OpResult {
         let text = try recognizeText(load(url).cg).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { throw FWError("图里没认出文字") }
-        let out = Out.url(for: url, suffix: "文字", ext: "txt")
+        let out = try Out.url(for: url, suffix: "文字", ext: "txt")
         try text.write(to: out, atomically: true, encoding: .utf8)
         return OpResult(outputs: [out], note: "认出 \(Fmt.count(text.count)) 字，已复制", clip: text)
     }
@@ -278,7 +278,7 @@ enum ImageOps {
         guard let filtered = CIFilter(name: "CIPhotoEffectMono", parameters: [kCIInputImageKey: ci])?.outputImage,
               let gray = CIContext().createCGImage(filtered, from: ci.extent) else { throw FWError("处理失败") }
         let fmt = sameFormat(url)
-        let out = Out.url(for: url, suffix: "黑白", ext: fmt)
+        let out = try Out.url(for: url, suffix: "黑白", ext: fmt)
         try await write(gray, to: out, fmt: fmt, quality: lossyQuality(fmt), props: carryOver(image.props))
         return OpResult(outputs: [out])
     }
@@ -286,7 +286,7 @@ enum ImageOps {
     static func rotate(_ url: URL) async throws -> OpResult {
         let image = try load(url)
         let fmt = sameFormat(url)
-        let out = Out.url(for: url, suffix: "旋转", ext: fmt)
+        let out = try Out.url(for: url, suffix: "旋转", ext: fmt)
         try await write(rotated(image.cg), to: out, fmt: fmt, quality: fmt == "jpg" ? 0.95 : lossyQuality(fmt), props: carryOver(image.props))
         return OpResult(outputs: [out])
     }
@@ -296,7 +296,7 @@ enum ImageOps {
         let note = Privacy.evadedNote
         if let src = CGImageSourceCreateWithURL(url as CFURL, nil), let type = CGImageSourceGetType(src),
            [UTType.jpeg.identifier, UTType.png.identifier, UTType.tiff.identifier].contains(type as String) {
-            let out = Out.url(for: url, suffix: "去隐私", ext: url.pathExtension.lowercased())
+            let out = try Out.url(for: url, suffix: "去隐私", ext: url.pathExtension.lowercased())
             let index = CGImageSourceGetPrimaryImageIndex(src)
             let props = (CGImageSourceCopyPropertiesAtIndex(src, index, nil) as? [CFString: Any]) ?? [:]
             let metadata = CGImageMetadataCreateMutable()
@@ -318,7 +318,7 @@ enum ImageOps {
         }
         let image = try load(url)
         let fmt = sameFormat(url)
-        let out = Out.url(for: url, suffix: "去隐私", ext: fmt)
+        let out = try Out.url(for: url, suffix: "去隐私", ext: fmt)
         try await write(image.cg, to: out, fmt: fmt, quality: fmt == "jpg" ? 0.95 : lossyQuality(fmt), props: [kCGImagePropertyOrientation: 1])
         return OpResult(outputs: [out], note: note)
     }
@@ -358,7 +358,7 @@ enum ImageOps {
         ctx.restoreGState()
 
         guard let framed = ctx.makeImage() else { throw FWError("合成失败") }
-        let out = Out.url(for: url, suffix: "加背景", ext: "png")
+        let out = try Out.url(for: url, suffix: "加背景", ext: "png")
         try await write(framed, to: out, fmt: "png")
         return OpResult(outputs: [out])
     }

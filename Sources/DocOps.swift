@@ -47,7 +47,7 @@ enum DocOps {
     }
 
     static func convert(_ url: URL, to fmt: String) async throws -> OpResult {
-        let out = Out.url(for: url, ext: fmt)
+        let out = try Out.url(for: url, ext: fmt)
         if !isMarkdown(url), textutilFormats.contains(fmt) {
             do {
                 try await Shell.run("/usr/bin/textutil", ["-convert", fmt, "-output", out.path, url.path])

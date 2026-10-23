@@ -46,7 +46,7 @@ enum PDFOps {
         let quality: Double? = fmt == "jpg" ? 0.9 : nil
         if count == 1 {
             guard let page = doc.page(at: 1), let image = render(page, scale: 2) else { throw FWError("页面渲染失败") }
-            let out = Out.url(for: url, ext: fmt)
+            let out = try Out.url(for: url, ext: fmt)
             try await ImageOps.write(image, to: out, fmt: fmt, quality: quality)
             return OpResult(outputs: [out])
         }
@@ -105,7 +105,7 @@ enum PDFOps {
             }
             guard let stitched = ctx.makeImage() else { throw FWError("长图合成失败") }
             let suffix = parts.count > 1 ? "长图 \(n + 1)" : "长图"
-            let out = Out.url(for: url, suffix: suffix, ext: "jpg")
+            let out = try Out.url(for: url, suffix: suffix, ext: "jpg")
             try await ImageOps.write(stitched, to: out, fmt: "jpg", quality: 0.88)
             outputs.append(out)
         }
@@ -196,7 +196,7 @@ enum PDFOps {
     }
 
     static func toText(_ url: URL, fmt: String) async throws -> OpResult {
-        let out = Out.url(for: url, ext: fmt)
+        let out = try Out.url(for: url, ext: fmt)
         let text = try attributed(url)
         if fmt == "txt" {
             try text.string.write(to: out, atomically: true, encoding: .utf8)
@@ -208,7 +208,7 @@ enum PDFOps {
 
     static func compress(_ url: URL) throws -> OpResult {
         let doc = try open(url)
-        let out = Out.url(for: url, suffix: "压缩", ext: "pdf")
+        let out = try Out.url(for: url, suffix: "压缩", ext: "pdf")
         guard doc.write(to: out, withOptions: [.saveImagesAsJPEGOption: true, .optimizeImagesForScreenOption: true]) else {
             throw FWError("压缩失败")
         }
@@ -228,7 +228,7 @@ enum PDFOps {
             guard let page = doc.page(at: i)?.copy() as? PDFPage else { continue }
             let single = PDFDocument()
             single.insert(page, at: 0)
-            single.write(to: folder.appendingPathComponent("\(base)-\(i + 1).pdf"))
+            guard single.write(to: folder.appendingPathComponent("\(base)-\(i + 1).pdf")) else { throw FWError("保存失败") }
         }
         return OpResult(outputs: [folder], note: "拆成 \(doc.pageCount) 个文件")
     }
@@ -258,7 +258,7 @@ enum PDFOps {
             }
         }
         guard merged.pageCount > 0, let first = urls.first else { throw FWError("没有可以合并的页面") }
-        let out = Out.url(for: first, suffix: "合并", ext: "pdf")
+        let out = try Out.url(for: first, suffix: "合并", ext: "pdf")
         guard merged.write(to: out) else { throw FWError("合并失败") }
         _ = keepAlive
         return out
@@ -269,7 +269,7 @@ enum PDFOps {
         for i in 0..<doc.pageCount {
             if let page = doc.page(at: i) { page.rotation = (page.rotation + 90) % 360 }
         }
-        let out = Out.url(for: url, suffix: "旋转", ext: "pdf")
+        let out = try Out.url(for: url, suffix: "旋转", ext: "pdf")
         guard doc.write(to: out) else { throw FWError("保存失败") }
         return OpResult(outputs: [out])
     }
@@ -280,7 +280,7 @@ enum PDFOps {
         guard let filter = QuartzFilter(url: URL(fileURLWithPath: "/System/Library/Filters/Gray Tone.qfilter")) else {
             throw FWError("系统里找不到灰度滤镜")
         }
-        let out = Out.url(for: url, suffix: "黑白", ext: "pdf")
+        let out = try Out.url(for: url, suffix: "黑白", ext: "pdf")
         guard let ctx = CGContext(out as CFURL, mediaBox: nil, [kCGPDFContextCreator: "格式轮盘"] as CFDictionary) else {
             throw FWError("无法创建 PDF")
         }
@@ -311,7 +311,7 @@ enum PDFOps {
         }
         let text = parts.joined(separator: "\n\n").trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { throw FWError("没认出文字") }
-        let out = Out.url(for: url, suffix: "文字", ext: "txt")
+        let out = try Out.url(for: url, suffix: "文字", ext: "txt")
         try text.write(to: out, atomically: true, encoding: .utf8)
         return OpResult(outputs: [out], note: "认出 \(Fmt.count(text.count)) 字，已复制", clip: text)
     }
