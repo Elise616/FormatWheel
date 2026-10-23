@@ -292,7 +292,7 @@ enum Catalog {
             WheelOption(id: "img.rotate", symbol: "rotate.right", ammo: "旋转", title: "旋转",
                         detail: "顺时针转 90°"),
             WheelOption(id: "img.strip", symbol: "location.slash", ammo: "去隐私", title: "去隐私",
-                        detail: "抹掉 GPS 位置和拍摄信息，发图更安心"),
+                        detail: "处理 EXIF/GPS/XMP；不等于内容匿名化"),
             WheelOption(id: "img.backdrop", symbol: "photo.artframe", ammo: "加背景", title: "加背景",
                         detail: "加渐变背景、圆角和阴影，截图秒变精致"),
         ])
@@ -330,12 +330,12 @@ enum Catalog {
             WheelOption(id: "pdf.rotate", symbol: "rotate.right", ammo: "旋转", title: "旋转", detail: "所有页面顺时针转 90°"),
             WheelOption(id: "pdf.mono", symbol: "circle.lefthalf.filled", ammo: "黑白", title: "黑白", detail: "转成灰度，打印省彩墨"),
             WheelOption(id: "pdf.ocr", symbol: "text.viewfinder", ammo: "识字", title: "识字", detail: "扫描件也能认出文字，复制到剪贴板"),
-            strip("pdf.strip", detail: "抹掉作者、制作软件和创建时间，甩掉警察"),
+            strip("pdf.strip", detail: "处理文档属性；不含批注、附件及其他元数据"),
             zipOption,
         ])
     }
 
-    /// 去隐私: clears the wanted level (location, device, author…).
+    /// 去隐私: clears the listed metadata fields only; the result notes spell out the scope.
     static func strip(_ id: String, detail: String) -> WheelOption {
         WheelOption(id: id, symbol: "location.slash", ammo: "去隐私", title: "去隐私", detail: detail)
     }
@@ -372,7 +372,7 @@ enum Catalog {
                         stats: adjusted(base, [0: { min($0, 0.6) }, 1: { $0 + 0.25 }])),
             WheelOption(id: "vid.cover", symbol: "photo", ammo: "封面", title: "截封面", detail: "截取一帧存成 JPG"),
             fast, slow,
-            strip("vid.strip", detail: "抹掉拍摄地点、机型和时间，不重新压缩"),
+            strip("vid.strip", detail: "处理容器元数据；不保证清除轨道内信息"),
             zipOption,
         ])
     }
@@ -425,10 +425,10 @@ enum Catalog {
     }
 
     private static func docTools(word: Bool) -> WheelPage {
-        var lieLow = strip("doc.strip", detail: "抹掉作者、修改人和公司名")
+        var lieLow = strip("doc.strip", detail: "处理作者等属性；不含批注、修订及正文")
         if !word {
             lieLow.enabled = false
-            lieLow.note = "只有 Word（.docx）文档会带作者信息"
+            lieLow.note = "此工具仅支持 Word（.docx）属性"
         }
         return WheelPage(name: "工具", slots: [
             WheelOption(id: "doc.count", symbol: "textformat.123", ammo: "字数", title: "字数统计", detail: "数一数一共多少字"),

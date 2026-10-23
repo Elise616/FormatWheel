@@ -291,11 +291,13 @@ enum ImageOps {
         return OpResult(outputs: [out])
     }
 
-    /// Removes EXIF/GPS/XMP. JPEG, PNG and TIFF are rewritten without re-encoding the pixels.
+    /// Removes EXIF/GPS/XMP. JPEG is rewritten without re-encoding the pixels.
+    /// PNG and TIFF are left out of that fast path: CopyImageSource carries their native metadata (PNG eXIf/iTXt,
+    /// TIFF camera/author tags) across regardless of the exclude options, so they take the lossless re-encode below.
     static func strip(_ url: URL) async throws -> OpResult {
-        let note = Privacy.evadedNote
+        let note = Privacy.imageNote
         if let src = CGImageSourceCreateWithURL(url as CFURL, nil), let type = CGImageSourceGetType(src),
-           [UTType.jpeg.identifier, UTType.png.identifier, UTType.tiff.identifier].contains(type as String) {
+           type as String == UTType.jpeg.identifier {
             let out = Out.url(for: url, suffix: "去隐私", ext: url.pathExtension.lowercased())
             let index = CGImageSourceGetPrimaryImageIndex(src)
             let props = (CGImageSourceCopyPropertiesAtIndex(src, index, nil) as? [CFString: Any]) ?? [:]

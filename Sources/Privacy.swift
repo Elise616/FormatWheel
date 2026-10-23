@@ -177,7 +177,11 @@ enum Privacy {
 
     // MARK: - Lying low (去隐私)
 
-    static let evadedNote = "已甩掉警察：定位、设备和作者信息都抹掉了"
+    // Notes state only what each strip really touches; none of them promises anonymity.
+    static let imageNote = "已处理图片元数据；不等于内容匿名化"
+    static let videoNote = "已处理视频容器元数据；不保证清除轨道内信息"
+    static let pdfNote = "已处理 PDF 文档属性；不含批注、附件及其他元数据"
+    static let docxNote = "已处理 Word 作者等属性；不含批注、修订及正文"
 
     /// Videos: re-wrap without re-encoding and without metadata (location, device, dates).
     static func stripVideo(_ url: URL, progress: @escaping ProgressFn) async throws -> OpResult {
@@ -189,11 +193,11 @@ enum Privacy {
                 session.metadata = []
                 session.metadataItemFilter = .forSharing()
             }
-            return OpResult(outputs: [out], note: evadedNote)
+            return OpResult(outputs: [out], note: videoNote)
         }
         let out = Out.url(for: url, suffix: "去隐私", ext: ext.isEmpty ? "mp4" : ext)
         try await MediaOps.ff(url, ["-map", "0", "-map_metadata", "-1", "-c", "copy"], out: out, progress: progress)
-        return OpResult(outputs: [out], note: evadedNote)
+        return OpResult(outputs: [out], note: videoNote)
     }
 
     static func stripPDF(_ url: URL) throws -> OpResult {
@@ -206,7 +210,7 @@ enum Privacy {
         doc.documentAttributes = attributes
         let out = Out.url(for: url, suffix: "去隐私", ext: "pdf")
         guard doc.write(to: out) else { throw FWError("保存失败") }
-        return OpResult(outputs: [out], note: evadedNote)
+        return OpResult(outputs: [out], note: pdfNote)
     }
 
     /// Word: blanks the author fields in docProps/core.xml and app.xml inside a copy of the file.
@@ -235,6 +239,6 @@ enum Privacy {
             try? FileManager.default.removeItem(at: out)
             throw error
         }
-        return OpResult(outputs: [out], note: evadedNote)
+        return OpResult(outputs: [out], note: docxNote)
     }
 }
